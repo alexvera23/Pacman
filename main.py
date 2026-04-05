@@ -10,10 +10,12 @@ import pandas as pd
 
 import sys
 sys.path.append('..')
-from Pacman import Pacman
-from Ghost  import Ghost
-from Blinky import Blinky   # rojo  — persecución directa (distancia Manhattan)
-from Pinky  import Pinky    # rosa  — emboscada con poda alfa-beta
+from Pacman      import Pacman
+from Ghost       import Ghost
+from Blinky      import Blinky       # rojo  — persecución directa (distancia Manhattan)
+from Pinky       import Pinky        # rosa  — emboscada con poda alfa-beta
+from Inky        import Inky         # cian  — caza en manada con H(S) socio-céntrico
+from Clyde       import Clyde        # naranja — caza en manada con H(S) socio-céntrico
 
 # ── Ventana ───────────────────────────────────────────────────────────────────
 screen_width  = 720
@@ -23,10 +25,10 @@ screen_height = 720
 BASE_PATH  = os.path.abspath(os.path.dirname(__file__))
 file_map   = os.path.join(BASE_PATH, 'mapa.bmp')
 img_pacman = os.path.join(BASE_PATH, 'pacman.bmp')
-img_ghost1 = os.path.join(BASE_PATH, 'fantasma1.bmp')   # rojo  → Blinky
-img_ghost2 = os.path.join(BASE_PATH, 'fantasma2.bmp')   # rosa  → Pinky
-img_ghost3 = os.path.join(BASE_PATH, 'fantasma3.bmp')
-img_ghost4 = os.path.join(BASE_PATH, 'fantasma4.bmp')
+img_ghost1 = os.path.join(BASE_PATH, 'fantasma1.bmp')   # rojo   → Blinky
+img_ghost2 = os.path.join(BASE_PATH, 'fantasma2.bmp')   # rosa   → Pinky
+img_ghost3 = os.path.join(BASE_PATH, 'fantasma3.bmp')   # cian   → Inky
+img_ghost4 = os.path.join(BASE_PATH, 'fantasma4.bmp')   # naranja → Clyde
 
 file_csv = os.path.join(BASE_PATH, 'mapa.csv')
 matrix   = np.array(pd.io.parsers.read_csv(file_csv, header=None)).astype("int")
@@ -56,16 +58,21 @@ for px, mc_idx in zip([0,51,90,130,168,208,244,282,320,360], range(10)):
 # ── Objetos del juego ─────────────────────────────────────────────────────────
 pc = Pacman(matrix, MC, XPxToMC, YPxToMC)
 
-# Blinky — esquina inferior-derecha, dirección inicial 2 (abajo)
+# Blinky — persecución directa (distancia Manhattan)
 blinky = Blinky(matrix, MC, XPxToMC, YPxToMC, 378, 380, 2)
 
-# Pinky — esquina superior-derecha, dirección inicial 0 (arriba)
+# Pinky — emboscada con poda alfa-beta
 pinky = Pinky(matrix, MC, XPxToMC, YPxToMC, 378, 20, 0)
 
-# Fantasmas aleatorios restantes
-ghosts = []
-ghosts.append(Ghost(matrix, MC, XPxToMC, YPxToMC, 20, 380, 3, 0))
-ghosts.append(Ghost(matrix, MC, XPxToMC, YPxToMC, 20,  20, 1, 0))
+# ── Inky y Clyde: cazadores en manada ────────────────────────────────────────
+# Inky  arranca en la esquina inferior-izquierda mirando a la izquierda (dir=3)
+# Clyde arranca en la esquina superior-izquierda mirando a la derecha  (dir=1)
+inky  = Inky (matrix, MC, XPxToMC, YPxToMC, 20, 380, 3)
+clyde = Clyde(matrix, MC, XPxToMC, YPxToMC, 20,  20, 1)
+
+# Vincular pareja: cada uno conoce la posición del otro para evaluar H(S)
+inky.set_partner(clyde)
+clyde.set_partner(inky)
 
 MAP_SIZE    = 400
 SPRITE_HALF = 18
@@ -109,18 +116,20 @@ def Init():
     glEnable(GL_BLEND)
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
 
+    # Orden de carga → índice en la lista textures[]
     load_texture(file_map,   use_colorkey=False)  # textures[0] mapa
-    load_texture(img_ghost1, use_colorkey=True)   # textures[1] Blinky (rojo)
-    load_texture(img_ghost2, use_colorkey=True)   # textures[2] Pinky  (rosa)
+    load_texture(img_ghost1, use_colorkey=True)   # textures[1] Blinky  (rojo)
+    load_texture(img_ghost2, use_colorkey=True)   # textures[2] Pinky   (rosa)
     load_texture(img_pacman, use_colorkey=True)   # textures[3] Pac-Man
-    load_texture(img_ghost3, use_colorkey=True)   # textures[4] fantasma aleatorio 1
-    load_texture(img_ghost4, use_colorkey=True)   # textures[5] fantasma aleatorio 2
+    load_texture(img_ghost3, use_colorkey=True)   # textures[4] Inky    (cian)
+    load_texture(img_ghost4, use_colorkey=True)   # textures[5] Clyde   (naranja)
 
-    blinky.loadTextures(textures, 5)
-    pinky.loadTextures(textures, 4)
-    pc.loadTextures(textures, 3)
-    ghosts[0].loadTextures(textures, 1)
-    ghosts[1].loadTextures(textures, 2)
+    # Asignar texturas a cada sprite
+    blinky.loadTextures(textures, 1)
+    pinky .loadTextures(textures, 2)
+    pc    .loadTextures(textures, 3)
+    inky  .loadTextures(textures, 4)
+    clyde .loadTextures(textures, 5)
 
 # ── Dibujo del mapa ───────────────────────────────────────────────────────────
 def draw_map():
@@ -154,20 +163,22 @@ def display():
     glClear(GL_COLOR_BUFFER_BIT)
     draw_map()
 
-    # Blinky — update2 recibe solo la posición (compatibilidad original)
+    # Blinky — recibe solo la posición (compatibilidad original)
     blinky.update2(pc.position)
     draw_sprite(textures[blinky.Id], blinky.position[0], blinky.position[2])
 
-    # Pinky — update2 recibe el objeto Pacman completo (necesita .direction)
+    # Pinky — recibe objeto Pacman completo (necesita .direction)
     pinky.update2(pc)
     draw_sprite(textures[pinky.Id], pinky.position[0], pinky.position[2])
 
-    # Fantasmas aleatorios
-    for g in ghosts:
-        g.update2(pc.position)
-        draw_sprite(textures[g.Id], g.position[0], g.position[2])
+    # Inky y Clyde — reciben objeto Pacman completo (necesitan .direction para P*)
+    inky.update2(pc)
+    draw_sprite(textures[inky.Id], inky.position[0], inky.position[2])
 
-    # Pac-Man siempre al frente
+    clyde.update2(pc)
+    draw_sprite(textures[clyde.Id], clyde.position[0], clyde.position[2])
+
+    # Pac-Man siempre al frente (se dibuja último)
     draw_sprite(textures[pc.Id], pc.position[0], pc.position[2])
 
 # ── Main loop ─────────────────────────────────────────────────────────────────
