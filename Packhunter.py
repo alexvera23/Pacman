@@ -36,14 +36,22 @@ class PackHunter(Ghost):
     W_MOBILITY = 0.3    # bono por movilidad
 
     # ── Parámetros Tabu ────────────────────────────────────────────────────
-    TABU_K = 5          # tamaño de la cola FIFO de posiciones MC
+    TABU_K           = 6    # tamaño de la cola FIFO de posiciones MC
+    TABU_HARD_PENALTY = 400 # penalización en H(S) por visitar una celda tabú
+                            # (hard-filter + soft-penalty: inaceptable incluso
+                            #  en el fallback cuando todas las opciones son tabú)
 
     # ── Parámetros Quiescence ──────────────────────────────────────────────
     OSC_PENALTY = 500   # costo extra al detectar patrón oscilatorio A→B→A
-    HIST_LEN    = 4     # posiciones MC que se recuerdan para detectar oscilación
+    HIST_LEN    = 6     # posiciones MC que se recuerdan para detectar oscilación
 
     # ── Look-ahead para P* ─────────────────────────────────────────────────
-    PAC_LOOKAHEAD = 40  # píxeles delante de Pac-Man que define P*
+    PAC_LOOKAHEAD = 40  # píxeles delante de Pac-Man que define P* (máximo)
+
+    # ── Anticipación dinámica: colapso cuando Pac-Man está quieto ──────────
+    IDLE_GRACE = 45     # frames sin movimiento tras los cuales el lookahead
+                        # ha colapsado completamente a 0 (persecución directa).
+                        # A 60 fps ≈ 0.75 s de quietud.
 
     # ── Umbrales para el efecto pinza ──────────────────────────────────────
     PINZA_PROXIMITY = 120  # radio centroide↔Pac-Man que activa la penalización
@@ -90,6 +98,13 @@ class PackHunter(Ghost):
         self.MCToXPx = self._build_reverse(x_mc)
         self.MCToYPx = self._build_reverse(y_mc)
 
+        # ── Anticipación dinámica ──────────────────────────────────────────
+        # Seguimos la posición de Pac-Man frame a frame para detectar si está
+        # quieto y colapsar el lookahead a 0 (persecución directa).
+        self._pac_last_pos     = None   # (x, z) del frame anterior
+        self._pac_idle_frames  = 0      # frames consecutivos sin moverse
+        self._current_ahead_px = self.PAC_LOOKAHEAD  # lookahead efectivo actual
+
     # ══════════════════════════════════════════════════════════════════════════
     # Utilidades internas
     # ══════════════════════════════════════════════════════════════════════════
@@ -125,12 +140,17 @@ class PackHunter(Ghost):
 
     def _pressure_point(self, pacman):
         """
-        P* = posición actual de Pac-Man + vector dirección × PAC_LOOKAHEAD píxeles.
-        Representa el punto 'estratégico' al que deben converger los cazadores.
+        P* = posición de Pac-Man + vector dirección × _current_ahead_px píxeles.
+
+        El lookahead es DINÁMICO: si Pac-Man lleva quieto varios frames
+        (_pac_idle_frames ≥ IDLE_GRACE) _current_ahead_px cae a 0 y P*
+        colapsa sobre la posición real de Pac-Man → persecución directa.
+        Esto evita que los fantasmas patrullen un punto ficticio lejano
+        mientras Pac-Man está justo al lado (efecto horizonte estático).
         """
         dvx, dvz = self.DIR_DELTA.get(pacman.direction, (0, 0))
-        return (pacman.position[0] + dvx * self.PAC_LOOKAHEAD,
-                pacman.position[2] + dvz * self.PAC_LOOKAHEAD)
+        return (pacman.position[0] + dvx * self._current_ahead_px,
+                pacman.position[2] + dvz * self._current_ahead_px)
 
     def set_partner(self, partner):
         """Vincula al compañero de caza. Llamar desde main.py tras instanciar ambos."""
@@ -193,6 +213,16 @@ class PackHunter(Ghost):
         H = (self.W_CENTROID * d_centroid
              + self.W_OVERLAP  * overlap_penalty
              - self.W_MOBILITY * mobility)
+
+        # ── Penalización blanda por Tabu ──────────────────────────────────
+        # Se aplica SIEMPRE sobre la función de evaluación, incluso cuando el
+        # hard-filter tuvo que hacer fallback (todas las opciones eran tabú).
+        # Esto garantiza que la evaluación penalice las celdas recientes incluso
+        # cuando no hay otra salida, empujando al fantasma a elegir la celda
+        # tabú "menos reciente" si existe más de una en el fallback.
+        if (cand_mx, cand_mz) in self.tabu:
+            H += self.TABU_HARD_PENALTY
+
         return H
 
     # ══════════════════════════════════════════════════════════════════════════
@@ -325,14 +355,32 @@ class PackHunter(Ghost):
 
     # ══════════════════════════════════════════════════════════════════════════
     # update2: reemplaza al de Ghost para recibir el objeto Pacman completo
-    #Hola 
     # ══════════════════════════════════════════════════════════════════════════
 
     def update2(self, pacman):
         """
         Recibe el objeto Pacman completo (no solo la posición) para poder leer
         pacman.direction, necesario para calcular P*.
+
+        Antes de delegar a path_ia, actualiza el contador de quietud de Pac-Man
+        y recalcula _current_ahead_px para que la anticipación sea dinámica:
+          · Pac-Man en movimiento          → lookahead = PAC_LOOKAHEAD (máximo)
+          · Pac-Man quieto < IDLE_GRACE f  → lookahead se reduce linealmente
+          · Pac-Man quieto ≥ IDLE_GRACE f  → lookahead = 0 (persecución directa)
         """
+        # ── Detectar si Pac-Man se movió este frame ────────────────────────
+        pac_now = (pacman.position[0], pacman.position[2])
+        if pac_now == self._pac_last_pos:
+            self._pac_idle_frames = min(self._pac_idle_frames + 1, self.IDLE_GRACE)
+        else:
+            self._pac_idle_frames = 0
+            self._pac_last_pos    = pac_now
+
+        # Lookahead escala linealmente: 100% en movimiento → 0% tras IDLE_GRACE
+        idle_ratio = self._pac_idle_frames / self.IDLE_GRACE
+        self._current_ahead_px = int(self.PAC_LOOKAHEAD * (1.0 - idle_ratio))
+
+        # ── Lógica de movimiento normal ────────────────────────────────────
         px_off = self.position[0] - 20
         pz_off = self.position[2] - 20
         x_ok = (0 <= px_off < len(self.XPxToMC)) and (self.XPxToMC[px_off] != -1)
