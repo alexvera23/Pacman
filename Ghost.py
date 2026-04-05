@@ -1,10 +1,8 @@
 import pygame
 from pygame.locals import *
 
-# Cargamos las bibliotecas de OpenGL
 from OpenGL.GL import *
 from OpenGL.GLU import *
-from OpenGL.GLUT import *
 
 import math
 import os
@@ -13,46 +11,36 @@ import pandas as pd
 import random
 
 class Ghost:
-    def __init__(self,mapa, mc, x_mc, y_mc, xini, yini, dir, tipo):
-        #Matriz de control que almacena los IDs de las intersecciones
+    def __init__(self, mapa, mc, x_mc, y_mc, xini, yini, dir, tipo):
         self.MC = mc
-        #Vectores que almacenan las coordenadas 
         self.XPxToMC = x_mc
         self.YPxToMC = y_mc
-        #se resplanda el mapa en terminos de pixeles
         self.mapa = mapa
-        #se inicializa la posicion del fantasma en terminos de pixeles
         self.position = []
         self.position.append(xini)
-        self.position.append(1) #YPos
+        self.position.append(1)  # YPos
         self.position.append(yini)
-        #se define el arreglo para la posicion en la matriz de control
         self.positionMC = []
-        self.positionMC.append(self.XPxToMC[self.position[0] - 20]) #coord en x
-        self.positionMC.append(self.YPxToMC[self.position[2] - 20]) #coord en y
-        #se inicializa una direccion valida
+        self.positionMC.append(self.XPxToMC[self.position[0] - 20])
+        self.positionMC.append(self.YPxToMC[self.position[2] - 20])
         self.direction = dir
-        #se almacena que tipo de fantasma sera:
-        #0: fantasma aleatorio
-        #1: fantasma con pathfinding
         self.tipo = tipo
-        #arreglo para almacenar las opciones del fantasma
         self.options = [
-            [1,2],
-            [2,3],
-            [0,1],
-            [0,3],
-            [1,2,3],
-            [0,2,3],
-            [0,1,3],
-            [0,1,2],
-            [0,1,2,3],
-            [1],
-            [3]
+            [1, 2],       # 0  → celId 10
+            [2, 3],       # 1  → celId 11
+            [0, 1],       # 2  → celId 12
+            [0, 3],       # 3  → celId 13
+            [1, 2, 3],    # 4  → celId 21
+            [0, 2, 3],    # 5  → celId 22
+            [0, 1, 3],    # 6  → celId 23
+            [0, 1, 2],    # 7  → celId 24
+            [0, 1, 2, 3], # 8  → celId 25
+            [1],          # 9  → celId 26
+            [3],          # 10 → celId 27
         ]
         self.option = []
         self.dir_inv = 0
-        
+
     def loadTextures(self, texturas, id):
         self.texturas = texturas
         self.Id = id
@@ -68,58 +56,53 @@ class Ghost:
         glTexCoord2f(1.0, 0.0)
         glVertex3f(x4, y4, z4)
         glEnd()
-   
+
     def sigue_adelante(self):
-        #si el fantasma esta en un tunel, no es necesario calcular la siguiente posicion a traves del path
-        #solo se sigue la direccion actual y se aumenta el contador que accede a la posicion del path actual
-        if self.direction == 0: #up
+        if self.direction == 0:
             self.position[2] -= 1
-        elif self.direction == 1: #right
+        elif self.direction == 1:
             self.position[0] += 1
-        elif self.direction == 2: #down
+        elif self.direction == 2:
             self.position[2] += 1
-        else: #left
+        else:
             self.position[0] -= 1
-        #se actualiza la variable de posicion sobre el path
-        if self.tipo == 1: #fantasma inteligente
+        if self.tipo == 1:
             self.path_n += 1
-        
-    def path_ia(self,pacmanXY):
-        # bloque para implementar la IA en los fantasmas
-        self.interseccion_random()            
-        
+
+    def path_ia(self, pacmanXY):
+        self.interseccion_random()
+
     def interseccion_random(self):
-        #se determina en que tipo de celda esta el fantasma
         self.positionMC[0] = self.XPxToMC[self.position[0] - 20]
         self.positionMC[1] = self.YPxToMC[self.position[2] - 20]
         celId = self.MC[self.positionMC[1]][self.positionMC[0]]
-        #a partir de la celda actual se generan sus opciones posibles
+
         if celId == 0:
             self.option = [self.direction]
-        elif celId == 10: #options = [1, 2]
-            self.option = self.options[0]
-        elif celId == 11: #options = [2, 3]
-            self.option = self.options[1]
-        elif celId == 12: #options = [0, 1]
-            self.option = self.options[2]
-        elif celId == 13: #options = [0, 3]
-            self.option = self.options[3]
-        elif celId == 21: #options = [1, 2, 3]
-            self.option = self.options[4]
-        elif celId == 22: #options = [0, 2, 3]
-            self.option = self.options[5]
-        elif celId == 23: #options = [0, 1, 3]
-            self.option = self.options[6]
-        elif celId == 24: #options = [0, 1, 2]
-            self.option = self.options[7]
-        elif celId == 25: #options = [0, 1, 2, 3]
-            self.option = self.options[8]
-        elif celId == 26: #options = [1]
-            self.option = self.options[9]
-        elif celId == 27: #options = [3]
-            self.option = self.options[10]
-        
-        #se calcula la direccion inversa a la actual
+        elif celId == 10:
+            self.option = list(self.options[0])
+        elif celId == 11:
+            self.option = list(self.options[1])
+        elif celId == 12:
+            self.option = list(self.options[2])
+        elif celId == 13:
+            self.option = list(self.options[3])
+        elif celId == 21:
+            self.option = list(self.options[4])
+        elif celId == 22:
+            self.option = list(self.options[5])
+        elif celId == 23:
+            self.option = list(self.options[6])
+        elif celId == 24:
+            self.option = list(self.options[7])
+        elif celId == 25:
+            self.option = list(self.options[8])
+        elif celId == 26:
+            self.option = list(self.options[9])
+        elif celId == 27:
+            self.option = list(self.options[10])
+
+        # Calcular dirección inversa
         if self.direction == 0:
             self.dir_inv = 2
         elif self.direction == 1:
@@ -129,18 +112,24 @@ class Ghost:
         else:
             self.dir_inv = 1
 
-        #se elimina la direccion invertida a la actual, evitando que el
-        #fantasma regrese por el camion por donde llego (rebote)
-        if (celId != 0) and (celId != 26) and (celId != 27):
-            self.option.remove(self.dir_inv)
-        
-        #se elige aleatoriamente una opcion entre las disponibles
+        # ── FIX: solo eliminar dir_inv si realmente está en la lista ─────────
+        # El original hacía remove() sin verificar, causando ValueError cuando
+        # la celda solo admite una dirección (ej: celId 26 → solo [1]) y esa
+        # dirección coincide con dir_inv (el fantasma venía de la derecha).
+        if celId not in (0, 26, 27):
+            if self.dir_inv in self.option:
+                self.option.remove(self.dir_inv)
+
+        # Si después de eliminar dir_inv la lista quedó vacía (caso borde),
+        # permitir cualquier dirección disponible para la celda para no trabar.
+        if not self.option:
+            self.option = [self.direction]
+
+        # Elegir dirección aleatoria entre las disponibles
         size = len(self.option)
         dir_rand = random.randint(0, size - 1)
-        
-        #se actualiza el vector de direccion y posicion del fantasma
         self.direction = self.option[dir_rand]
-        
+
         if self.direction == 0:
             self.position[2] -= 1
         elif self.direction == 1:
@@ -149,30 +138,29 @@ class Ghost:
             self.position[2] += 1
         elif self.direction == 3:
             self.position[0] -= 1
-            
-        if (celId != 0) and (celId != 26) and (celId != 27):
-            self.option.append(self.dir_inv)    
-    
-    def update2(self,pacmanXY):
-        #si el fantasma se encuentra en una interseccion (valida o "falsa interseccion")
-        if ((self.YPxToMC[self.position[2] - 20] != -1) and 
-            (self.XPxToMC[self.position[0] - 20] != -1)):
-            if self.tipo == 1: #agente inteligente, se manda la posición del objetivo
+
+        # Restaurar dir_inv en la lista para la próxima intersección
+        if celId not in (0, 26, 27):
+            if self.dir_inv not in self.option:
+                self.option.append(self.dir_inv)
+
+    def update2(self, pacmanXY):
+        if ((self.YPxToMC[self.position[2] - 20] != -1) and
+                (self.XPxToMC[self.position[0] - 20] != -1)):
+            if self.tipo == 1:
                 self.path_ia(pacmanXY)
             else:
                 self.interseccion_random()
-        else: #si no se encuentra en una interseccion o es falsa interseccion
+        else:
             self.sigue_adelante()
-        
+
     def draw(self):
         glPushMatrix()
         glColor3f(1.0, 1.0, 1.0)
         glTranslatef(self.position[0], self.position[1], self.position[2])
-        glScaled(10,1,10)
-        #Activate textures
+        glScaled(10, 1, 10)
         glEnable(GL_TEXTURE_2D)
-        #front face
         glBindTexture(GL_TEXTURE_2D, self.texturas[self.Id])
-        self.drawFace(-1.0, 1.0, -1.0, -1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, -1.0)    
-        glDisable(GL_TEXTURE_2D)  
-        glPopMatrix()        
+        self.drawFace(-1.0, 1.0, -1.0, -1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, -1.0)
+        glDisable(GL_TEXTURE_2D)
+        glPopMatrix()

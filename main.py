@@ -11,7 +11,9 @@ import pandas as pd
 import sys
 sys.path.append('..')
 from Pacman import Pacman
-from Ghost import Ghost
+from Ghost  import Ghost
+from Blinky import Blinky   # rojo  — persecución directa (distancia Manhattan)
+from Pinky  import Pinky    # rosa  — emboscada con poda alfa-beta
 
 # ── Ventana ───────────────────────────────────────────────────────────────────
 screen_width  = 720
@@ -21,8 +23,8 @@ screen_height = 720
 BASE_PATH  = os.path.abspath(os.path.dirname(__file__))
 file_map   = os.path.join(BASE_PATH, 'mapa.bmp')
 img_pacman = os.path.join(BASE_PATH, 'pacman.bmp')
-img_ghost1 = os.path.join(BASE_PATH, 'fantasma1.bmp')
-img_ghost2 = os.path.join(BASE_PATH, 'fantasma2.bmp')
+img_ghost1 = os.path.join(BASE_PATH, 'fantasma1.bmp')   # rojo  → Blinky
+img_ghost2 = os.path.join(BASE_PATH, 'fantasma2.bmp')   # rosa  → Pinky
 img_ghost3 = os.path.join(BASE_PATH, 'fantasma3.bmp')
 img_ghost4 = os.path.join(BASE_PATH, 'fantasma4.bmp')
 
@@ -53,25 +55,25 @@ for px, mc_idx in zip([0,51,90,130,168,208,244,282,320,360], range(10)):
 
 # ── Objetos del juego ─────────────────────────────────────────────────────────
 pc = Pacman(matrix, MC, XPxToMC, YPxToMC)
+
+# Blinky — esquina inferior-derecha, dirección inicial 2 (abajo)
+blinky = Blinky(matrix, MC, XPxToMC, YPxToMC, 378, 380, 2)
+
+# Pinky — esquina superior-derecha, dirección inicial 0 (arriba)
+pinky = Pinky(matrix, MC, XPxToMC, YPxToMC, 378, 20, 0)
+
+# Fantasmas aleatorios restantes
 ghosts = []
-ghosts.append(Ghost(matrix, MC, XPxToMC, YPxToMC, 378, 380, 2, 0))
-ghosts.append(Ghost(matrix, MC, XPxToMC, YPxToMC, 378,  20, 0, 0))
-ghosts.append(Ghost(matrix, MC, XPxToMC, YPxToMC,  20, 380, 3, 0))
-ghosts.append(Ghost(matrix, MC, XPxToMC, YPxToMC,  20, 380, 3, 0))
+ghosts.append(Ghost(matrix, MC, XPxToMC, YPxToMC, 20, 380, 3, 0))
+ghosts.append(Ghost(matrix, MC, XPxToMC, YPxToMC, 20,  20, 1, 0))
 
 MAP_SIZE    = 400
-SPRITE_HALF = 18   # tamaño del sprite (aumentado para que se vea completo)
+SPRITE_HALF = 18
 
 textures = []
 
 # ── Carga de textura ──────────────────────────────────────────────────────────
 def load_texture(filepath, use_colorkey=False):
-    """
-    Carga una textura BMP.
-    use_colorkey=True: trata el negro puro (0,0,0) como transparente.
-    Esto soluciona el problema de sprites que solo muestran los "ojos"
-    porque el fondo negro de la imagen tapa el cuerpo del sprite.
-    """
     tid = glGenTextures(1)
     textures.append(tid)
     glBindTexture(GL_TEXTURE_2D, tid)
@@ -79,14 +81,10 @@ def load_texture(filepath, use_colorkey=False):
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP)
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
-
     image = pygame.image.load(filepath).convert()
-
     if use_colorkey:
-        # Convierte el negro puro en transparencia real
         image.set_colorkey((0, 0, 0), pygame.RLEACCEL)
         image = image.convert_alpha()
-
     w, h       = image.get_rect().size
     image_data = pygame.image.tostring(image, "RGBA")
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA,
@@ -111,20 +109,18 @@ def Init():
     glEnable(GL_BLEND)
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
 
-    # El mapa NO usa colorkey (es correcto que sea opaco)
-    load_texture(file_map,   use_colorkey=False)  # textures[0]
-    # Los sprites usan colorkey para eliminar el fondo negro
-    load_texture(img_pacman, use_colorkey=True)   # textures[1]
-    load_texture(img_ghost1, use_colorkey=True)   # textures[2]
-    load_texture(img_ghost2, use_colorkey=True)   # textures[3]
-    load_texture(img_ghost3, use_colorkey=True)   # textures[4]
-    load_texture(img_ghost4, use_colorkey=True)   # textures[5]
+    load_texture(file_map,   use_colorkey=False)  # textures[0] mapa
+    load_texture(img_ghost1, use_colorkey=True)   # textures[1] Blinky (rojo)
+    load_texture(img_ghost2, use_colorkey=True)   # textures[2] Pinky  (rosa)
+    load_texture(img_pacman, use_colorkey=True)   # textures[3] Pac-Man
+    load_texture(img_ghost3, use_colorkey=True)   # textures[4] fantasma aleatorio 1
+    load_texture(img_ghost4, use_colorkey=True)   # textures[5] fantasma aleatorio 2
 
-    pc.loadTextures(textures, 1)
-    ghosts[0].loadTextures(textures, 2)
-    ghosts[1].loadTextures(textures, 3)
-    ghosts[2].loadTextures(textures, 4)
-    ghosts[3].loadTextures(textures, 5)
+    blinky.loadTextures(textures, 5)
+    pinky.loadTextures(textures, 4)
+    pc.loadTextures(textures, 3)
+    ghosts[0].loadTextures(textures, 1)
+    ghosts[1].loadTextures(textures, 2)
 
 # ── Dibujo del mapa ───────────────────────────────────────────────────────────
 def draw_map():
@@ -157,10 +153,22 @@ def draw_sprite(tex_id, x, z):
 def display():
     glClear(GL_COLOR_BUFFER_BIT)
     draw_map()
-    draw_sprite(textures[pc.Id], pc.position[0], pc.position[2])
+
+    # Blinky — update2 recibe solo la posición (compatibilidad original)
+    blinky.update2(pc.position)
+    draw_sprite(textures[blinky.Id], blinky.position[0], blinky.position[2])
+
+    # Pinky — update2 recibe el objeto Pacman completo (necesita .direction)
+    pinky.update2(pc)
+    draw_sprite(textures[pinky.Id], pinky.position[0], pinky.position[2])
+
+    # Fantasmas aleatorios
     for g in ghosts:
-        draw_sprite(textures[g.Id], g.position[0], g.position[2])
         g.update2(pc.position)
+        draw_sprite(textures[g.Id], g.position[0], g.position[2])
+
+    # Pac-Man siempre al frente
+    draw_sprite(textures[pc.Id], pc.position[0], pc.position[2])
 
 # ── Main loop ─────────────────────────────────────────────────────────────────
 Init()
