@@ -76,6 +76,10 @@ class PackHunter(Ghost):
 
         self.partner = None   # referencia al otro PackHunter; asignar con set_partner()
 
+        # Ghost.sigue_adelante() incrementa path_n cuando tipo==1;
+        # lo inicializamos aquí para evitar AttributeError.
+        self.path_n = 0
+
         # Cola FIFO Tabu — últimas K posiciones MC visitadas
         self.tabu = deque(maxlen=self.TABU_K)
 
