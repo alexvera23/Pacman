@@ -325,6 +325,7 @@ class PackHunter(Ghost):
 
     # ══════════════════════════════════════════════════════════════════════════
     # update2: reemplaza al de Ghost para recibir el objeto Pacman completo
+    #Hola 
     # ══════════════════════════════════════════════════════════════════════════
 
     def update2(self, pacman):
