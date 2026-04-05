@@ -125,11 +125,11 @@ def Init():
     load_texture(img_ghost4, use_colorkey=True)   # textures[5] Clyde   (naranja)
 
     # Asignar texturas a cada sprite
-    blinky.loadTextures(textures, 1)
-    pinky .loadTextures(textures, 2)
+    blinky.loadTextures(textures, 5)
+    pinky .loadTextures(textures, 4)
     pc    .loadTextures(textures, 3)
-    inky  .loadTextures(textures, 4)
-    clyde .loadTextures(textures, 5)
+    inky  .loadTextures(textures, 1)
+    clyde .loadTextures(textures, 2)
 
 # ── Dibujo del mapa ───────────────────────────────────────────────────────────
 def draw_map():
