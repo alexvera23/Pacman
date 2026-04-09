@@ -35,6 +35,10 @@ class PackHunter(Ghost):
     W_OVERLAP  = 2.5    # penalización alta por solapamiento
     W_MOBILITY = 0.3    # bono por movilidad
 
+    # ── Nombre del fantasma para mensajes de consola ──────────────────────
+    GHOST_NAME      = "PACK HUNTER"   # las subclases lo sobreescriben
+    CATCH_THRESHOLD = 20              # distancia Manhattan (px) para considerar captura
+
     # ── Parámetros Tabu ────────────────────────────────────────────────────
     TABU_K           = 6    # tamaño de la cola FIFO de posiciones MC
     TABU_HARD_PENALTY = 400 # penalización en H(S) por visitar una celda tabú
@@ -379,6 +383,15 @@ class PackHunter(Ghost):
         # Lookahead escala linealmente: 100% en movimiento → 0% tras IDLE_GRACE
         idle_ratio = self._pac_idle_frames / self.IDLE_GRACE
         self._current_ahead_px = int(self.PAC_LOOKAHEAD * (1.0 - idle_ratio))
+
+        # ── Detección de captura ───────────────────────────────────────────
+        dist = abs(self.position[0] - pacman.position[0]) + \
+               abs(self.position[2] - pacman.position[2])
+        if dist < self.CATCH_THRESHOLD:
+            print(f"[{self.GHOST_NAME}] ¡Atrapó a Pac-Man! "
+                  f"[Ghost=({self.position[0]},{self.position[2]}) "
+                  f"Pacman=({pacman.position[0]},{pacman.position[2]}) "
+                  f"dist={dist}px]")
 
         # ── Lógica de movimiento normal ────────────────────────────────────
         px_off = self.position[0] - 20

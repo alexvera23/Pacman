@@ -17,6 +17,8 @@ class Blinky(Ghost):
       para que el comportamiento no sea perfectamente predecible.
     """
 
+    CATCH_THRESHOLD = 20   # distancia Manhattan (px) para considerar captura
+
     def __init__(self, mapa, mc, x_mc, y_mc, xini, yini, dir_ini):
         # tipo=0 para heredar la infraestructura de Ghost sin activar path-finding
         super().__init__(mapa, mc, x_mc, y_mc, xini, yini, dir_ini, tipo=0)
@@ -116,3 +118,11 @@ class Blinky(Ghost):
             self._chase(pacmanXY)
         else:
             self.sigue_adelante()
+
+        # ── Detección de captura ──────────────────────────────────────────────
+        dist = abs(self.position[0] - pacmanXY[0]) + abs(self.position[2] - pacmanXY[2])
+        if dist < self.CATCH_THRESHOLD:
+            print(f"[BLINKY] ¡Atrapó a Pac-Man! "
+                  f"[Blinky=({self.position[0]},{self.position[2]}) "
+                  f"Pacman=({pacmanXY[0]},{pacmanXY[2]}) "
+                  f"dist={dist}px]")

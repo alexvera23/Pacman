@@ -13,5 +13,7 @@ from PackHunter import PackHunter
 
 
 class Inky(PackHunter):
+    GHOST_NAME = "INKY"
+
     def __init__(self, mapa, mc, x_mc, y_mc, xini, yini, direction):
         super().__init__(mapa, mc, x_mc, y_mc, xini, yini, direction)
