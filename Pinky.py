@@ -470,18 +470,18 @@ class Pinky(Ghost):
         elif self._state == self.CAUGHT:
             self._wait_counter -= 1
             frames_seg = self._wait_counter / 60
-            self._log(
-                f"Esperando... {self._wait_counter} frames ({frames_seg:.1f}s) "
-                f"para reanudar la caza"
-            )
+            # self._log(
+            #     f"Esperando... {self._wait_counter} frames ({frames_seg:.1f}s) "
+            #     f"para reanudar la caza"
+            # )
             if self._wait_counter <= 0:
                 self._state = self.HUNTING
                 self._tabu.clear()   # tabú limpio para una caza fresca
-                self._log(
-                    f"¡Reanudando caza! "
-                    f"[Pinky=({self.position[0]},{self.position[2]}) "
-                    f"Pacman=({pac_x},{pac_z})]"
-                )
+                # self._log(
+                #     f"¡Reanudando caza! "
+                #     f"[Pinky=({self.position[0]},{self.position[2]}) "
+                #     f"Pacman=({pac_x},{pac_z})]"
+                # )
 
         # ── Comportamiento según estado ───────────────────────────────────────
         if self._state == self.CAUGHT:
@@ -489,15 +489,15 @@ class Pinky(Ghost):
             pass
 
         else:  # HUNTING
-            ahead_info = (f"ahead={self._current_ahead}celdas"
-                          if self._current_ahead > 0 else "modo=DIRECTO")
-            self._log(
-                f"Cazando — dist={dist}px | {ahead_info} | "
-                f"idle={self._pac_idle_frames}f | "
-                f"Pinky=({self.position[0]},{self.position[2]}) "
-                f"target≈({pac_x + self._DELTA[pac_dir][0]*self._current_ahead*self.CELL_PX},"
-                f"{pac_z + self._DELTA[pac_dir][1]*self._current_ahead*self.CELL_PX})"
-            )
+            # ahead_info = (f"ahead={self._current_ahead}celdas"
+            #               if self._current_ahead > 0 else "modo=DIRECTO")
+            # self._log(
+            #     f"Cazando — dist={dist}px | {ahead_info} | "
+            #     f"idle={self._pac_idle_frames}f | "
+            #     f"Pinky=({self.position[0]},{self.position[2]}) "
+            #     f"target≈({pac_x + self._DELTA[pac_dir][0]*self._current_ahead*self.CELL_PX},"
+            #     f"{pac_z + self._DELTA[pac_dir][1]*self._current_ahead*self.CELL_PX})"
+            # )
 
             en_interseccion = (
                 self.YPxToMC[self.position[2] - 20] != -1 and
