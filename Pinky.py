@@ -6,35 +6,6 @@ from Ghost import Ghost
 class Pinky(Ghost):
     """
     Pinky (fantasma rosa) — emboscada con poda alfa-beta.
-
-    ── Función de evaluación ────────────────────────────────────────────────────
-    score = -dist_manhattan(pinky, target) * W_DIST   ← factor primario
-          + bono_movilidad(celda_pinky)                ← factor secundario
-          - penalización_tabú(posición_pinky)          ← anti-ciclos (fuerte)
-
-    Donde target = posición `_current_ahead` celdas por delante de Pacman.
-    `_current_ahead` es DINÁMICO: colapsa a 0 si Pacman lleva quieto
-    IDLE_GRACE frames consecutivos → persecución directa en lugar de
-    emboscada sobre un punto ficticio estático (efecto horizonte).
-
-    ── Árbol de juego ───────────────────────────────────────────────────────────
-    MAX  →  Pinky elige la dirección que maximiza el score.
-    MIN  →  Pacman elige la dirección que minimiza el score (huye).
-
-    ── Mejoras al alfa-beta ─────────────────────────────────────────────────────
-    1. Tabú con horizonte limitado   : penaliza las últimas TABU_HORIZON
-                                       intersecciones visitadas por Pinky.
-                                       W_TABU = 300 hace inaceptable volver a
-                                       una celda reciente incluso cuando la
-                                       distancia mejoraría (fix del bug original
-                                       donde W_TABU=25 era superado fácilmente).
-    2. Move Ordering (búsqueda sesgada): ordena los movimientos candidatos por
-                                       evaluación superficial antes de recursar.
-    3. Quiescence Search (reposo)    : cuando depth==0 y Pinky está muy cerca
-                                       de Pacman, extiende QUIESCE_EXT niveles
-                                       para evitar el efecto horizonte cercano.
-    4. Anticipación dinámica         : el lookahead AHEAD_CELLS se escala a 0
-                                       cuando Pacman está quieto (IDLE_GRACE f).
     """
 
     # ── Pesos de la función de evaluación ────────────────────────────────────
@@ -43,7 +14,6 @@ class Pinky(Ghost):
     W_MOB_3     = 9.0    # bono por intersección con 3 salidas  (celId 21-24)
     W_MOB_2     = 3.0    # bono por esquina / 2 salidas         (celId 10-13)
     W_TABU      = 300.0  # penalización por posición tabú
-                         # (subió de 25 → 300: inaceptable incluso con ganancia
                          #  de distancia grande; evita que alfa-beta recomiende
                          #  volver a una celda recientemente visitada)
 
@@ -176,10 +146,8 @@ class Pinky(Ghost):
 
     def _mobility_bonus(self, cel_id):
         """
-        Componente 2 — Heurística de movilidad (Branching Factor):
+        Componente 2 — Heurística de movilidad:
         Premia estar en intersecciones con más salidas disponibles.
-        Un fantasma en una intersección amplia es más peligroso que
-        uno en un pasillo lineal.
         """
         if cel_id == 25:                   # 4 salidas
             return self.W_MOB_4
@@ -198,11 +166,6 @@ class Pinky(Ghost):
           · Distancia al target      → factor primario (escala W_DIST)
           · Bono de movilidad        → factor secundario significativo
           · Penalización tabú        → anti-ciclado (W_TABU=300, fuerte)
-
-        La penalización W_TABU=300 fue elevada desde 25 para que ninguna
-        ganancia de distancia (máximo ~700 px en el mapa 400×400) pueda
-        justificar volver a una celda recientemente visitada, resolviendo
-        el bug donde alfa-beta recomendaba revisitas.
         """
         dist  = abs(px - tx) + abs(pz - tz)
         score = -dist * self.W_DIST
@@ -216,12 +179,6 @@ class Pinky(Ghost):
         Componente 1 — Anticipación cinemática dinámica (Emboscada):
 
         Calcula el target = `_current_ahead` celdas por delante de Pacman.
-
-        `_current_ahead` se actualiza cada frame en update2:
-          · Si Pacman se mueve      → AHEAD_CELLS (emboscada normal)
-          · Si Pacman lleva quieto
-            < IDLE_GRACE frames    → lookahead se reduce linealmente
-          · Si quieto ≥ IDLE_GRACE → 0 (persecución directa)
 
         Esto evita el efecto horizonte estático: cuando Pacman se para,
         el target ficticio que estaba 4 celdas adelante desaparece y los
@@ -421,19 +378,7 @@ class Pinky(Ghost):
         Recibe el objeto Pacman completo (necesita position Y direction).
 
         Antes de la lógica de movimiento, actualiza el contador de quietud
-        de Pacman y recalcula _current_ahead:
-          · Pacman moviéndose     → _current_ahead = AHEAD_CELLS (emboscada)
-          · Quieto < IDLE_GRACE f → _current_ahead se reduce linealmente
-          · Quieto ≥ IDLE_GRACE f → _current_ahead = 0 (persecución directa)
-
-        Máquina de estados:
-        ┌──────────────────────────────────────────────────────────────────────┐
-        │  HUNTING → CAUGHT  : dist a Pacman < CATCH_THRESHOLD                 │
-        │  CAUGHT  → HUNTING : temporizador WAIT_FRAMES llega a 0              │
-        │                                                                      │
-        │  HUNTING : alfa-beta completo en cada intersección                   │
-        │  CAUGHT  : Pinky se detiene WAIT_FRAMES frames y luego vuelve a cazar│
-        └──────────────────────────────────────────────────────────────────────┘
+        de Pacman y recalcula _current_ahead
         """
         pac_x   = pacman.position[0]
         pac_z   = pacman.position[2]

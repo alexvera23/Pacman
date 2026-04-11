@@ -2,26 +2,6 @@
 PackHunter.py — Clase base para Inky y Clyde (caza en manada).
 
 Función de evaluación socio-céntrica H(S):
-  · Componente 1: Presión por centroide distribuido
-        Minimiza dist(centroide{Gi,Gc}, P*)  donde P* es la posición
-        futura estimada de Pac-Man (lookahead en su dirección).
-  · Componente 2: Efecto pinza (cobertura angular)
-        Penaliza que ambos fantasmas estén muy cerca entre sí cuando se
-        acercan a Pac-Man; los obliga a llegar por pasillos distintos.
-  · Bono de movilidad
-        Favorece celdas MC con más salidas para no quedar encañonado.
-
-Pesos elegidos:
-  W_CENTROID = 1.0  → prioridad máxima: reducir distancia al objetivo.
-  W_OVERLAP  = 2.5  → penalización alta: evitar solapamiento entre cazadores.
-  W_MOBILITY = 0.3  → bono suave: moverse hacia intersecciones ricas.
-
-Tres estrategias complementarias:
-  1. Move Ordering  — ordena candidatos por heurística rápida antes de
-                      evaluar H(S) completo (explora primero lo mejor).
-  2. Quiescence     — detecta oscilación A→B→A y añade penalización extra.
-  3. Tabu K-FIFO    — cola FIFO de tamaño K; descarta posiciones MC
-                      recientemente visitadas para forzar exploración.
 """
 
 from collections import deque
@@ -36,14 +16,13 @@ class PackHunter(Ghost):
     W_MOBILITY = 0.3    # bono por movilidad
 
     # ── Nombre del fantasma para mensajes de consola ──────────────────────
-    GHOST_NAME      = "PACK HUNTER"   # las subclases lo sobreescriben
-    CATCH_THRESHOLD = 20              # distancia Manhattan (px) para considerar captura
+    GHOST_NAME      = "PACK HUNTER"   
+    CATCH_THRESHOLD = 20              
 
     # ── Parámetros Tabu ────────────────────────────────────────────────────
     TABU_K           = 6    # tamaño de la cola FIFO de posiciones MC
     TABU_HARD_PENALTY = 400 # penalización en H(S) por visitar una celda tabú
-                            # (hard-filter + soft-penalty: inaceptable incluso
-                            #  en el fallback cuando todas las opciones son tabú)
+                            
 
     # ── Parámetros Quiescence ──────────────────────────────────────────────
     OSC_PENALTY = 500   # costo extra al detectar patrón oscilatorio A→B→A
@@ -54,8 +33,7 @@ class PackHunter(Ghost):
 
     # ── Anticipación dinámica: colapso cuando Pac-Man está quieto ──────────
     IDLE_GRACE = 45     # frames sin movimiento tras los cuales el lookahead
-                        # ha colapsado completamente a 0 (persecución directa).
-                        # A 60 fps ≈ 0.75 s de quietud.
+                        
 
     # ── Umbrales para el efecto pinza ──────────────────────────────────────
     PINZA_PROXIMITY = 120  # radio centroide↔Pac-Man que activa la penalización
@@ -81,7 +59,7 @@ class PackHunter(Ghost):
         27: [3],
     }
 
-    # ══════════════════════════════════════════════════════════════════════════
+    
     def __init__(self, mapa, mc, x_mc, y_mc, xini, yini, direction):
         # tipo=1 para que la clase base Ghost use path_ia si se llama a su update2
         super().__init__(mapa, mc, x_mc, y_mc, xini, yini, direction, tipo=1)
@@ -109,9 +87,8 @@ class PackHunter(Ghost):
         self._pac_idle_frames  = 0      # frames consecutivos sin moverse
         self._current_ahead_px = self.PAC_LOOKAHEAD  # lookahead efectivo actual
 
-    # ══════════════════════════════════════════════════════════════════════════
-    # Utilidades internas
-    # ══════════════════════════════════════════════════════════════════════════
+  
+    # Utilidades internas────────────────────────────────────────────────────
 
     @staticmethod
     def _build_reverse(arr):
@@ -145,12 +122,6 @@ class PackHunter(Ghost):
     def _pressure_point(self, pacman):
         """
         P* = posición de Pac-Man + vector dirección × _current_ahead_px píxeles.
-
-        El lookahead es DINÁMICO: si Pac-Man lleva quieto varios frames
-        (_pac_idle_frames ≥ IDLE_GRACE) _current_ahead_px cae a 0 y P*
-        colapsa sobre la posición real de Pac-Man → persecución directa.
-        Esto evita que los fantasmas patrullen un punto ficticio lejano
-        mientras Pac-Man está justo al lado (efecto horizonte estático).
         """
         dvx, dvz = self.DIR_DELTA.get(pacman.direction, (0, 0))
         return (pacman.position[0] + dvx * self._current_ahead_px,
@@ -160,19 +131,12 @@ class PackHunter(Ghost):
         """Vincula al compañero de caza. Llamar desde main.py tras instanciar ambos."""
         self.partner = partner
 
-    # ══════════════════════════════════════════════════════════════════════════
     # Función de evaluación socio-céntrica H(S)
-    # ══════════════════════════════════════════════════════════════════════════
+
 
     def _eval_H(self, cand_mx, cand_mz, pacman):
         """
         Evalúa H(S) asumiendo que ESTE fantasma se mueve a (cand_mx, cand_mz).
-
-        S = { posición candidata de este fantasma,
-              posición actual del compañero,
-              estado de Pac-Man }
-
-        Retorna un escalar: MENOR → MEJOR.
         """
         my_px, my_pz = self._mc_to_px(cand_mx, cand_mz)
         if my_px is None:
@@ -219,33 +183,24 @@ class PackHunter(Ghost):
              - self.W_MOBILITY * mobility)
 
         # ── Penalización blanda por Tabu ──────────────────────────────────
-        # Se aplica SIEMPRE sobre la función de evaluación, incluso cuando el
-        # hard-filter tuvo que hacer fallback (todas las opciones eran tabú).
-        # Esto garantiza que la evaluación penalice las celdas recientes incluso
-        # cuando no hay otra salida, empujando al fantasma a elegir la celda
-        # tabú "menos reciente" si existe más de una en el fallback.
         if (cand_mx, cand_mz) in self.tabu:
             H += self.TABU_HARD_PENALTY
 
         return H
 
-    # ══════════════════════════════════════════════════════════════════════════
+
     # Estrategia 1 — Tabu con horizonte limitado
-    # ══════════════════════════════════════════════════════════════════════════
+    
 
     def _apply_tabu(self, candidates, mx, mz):
-        """
-        Descarta direcciones candidatas cuyo destino MC aparezca en la cola Tabu.
-        Si todas las opciones son tabú (callejón sin salida), el filtro se ignora
-        para no bloquear al fantasma.
-        """
+      
         filtered = [d for d in candidates
                     if self._next_mc(mx, mz, d) not in self.tabu]
         return filtered if filtered else candidates   # fallback: ignorar Tabu
 
-    # ══════════════════════════════════════════════════════════════════════════
+
     # Estrategia 2 — Quiescence Search (Búsqueda del Reposo)
-    # ══════════════════════════════════════════════════════════════════════════
+
 
     def _quiescence_cost(self, next_mx, next_mz):
         """
@@ -257,19 +212,14 @@ class PackHunter(Ghost):
             return self.OSC_PENALTY
         return 0.0
 
-    # ══════════════════════════════════════════════════════════════════════════
+    
     # Estrategia 3 — Move Ordering (Búsqueda Sesgada)
-    # ══════════════════════════════════════════════════════════════════════════
+    
 
     def _order_moves(self, candidates, mx, mz, pacman):
         """
         Ordena los movimientos candidatos de MEJOR a PEOR mediante una
         heurística rápida (distancia Manhattan del siguiente MC a P*).
-
-        El orden garantiza que la evaluación completa de H(S) explore primero
-        las opciones más prometedoras, maximizando la calidad de la decisión
-        cuando el número de candidatos es alto.  En un árbol minimax equivale
-        al 'move ordering' que mejora la eficacia de la poda alfa-beta.
         """
         ps_x, ps_z = self._pressure_point(pacman)
 
@@ -282,23 +232,14 @@ class PackHunter(Ghost):
 
         return sorted(candidates, key=quick_h)
 
-    # ══════════════════════════════════════════════════════════════════════════
+    
     # Lógica de decisión en intersección
-    # ══════════════════════════════════════════════════════════════════════════
+    
 
     def path_ia(self, pacman):
         """
         Núcleo de la IA.  Se ejecuta cada vez que el fantasma alcanza una
         intersección válida (tanto XPxToMC como YPxToMC son != -1).
-
-        Flujo:
-          1. Actualiza posición MC.
-          2. Obtiene direcciones disponibles y elimina la inversa (no retroceder).
-          3. [Tabu]         Descarta posiciones MC recientemente visitadas.
-          4. [Move Ordering] Ordena candidatos por heurística rápida.
-          5. [H(S)+Quiescence] Evalúa cada candidato y elige el menor costo.
-          6. Mueve un píxel en la dirección elegida.
-          7. Registra la posición actual en Tabu e historial.
         """
         # ── 1. Actualizar posición MC ──────────────────────────────────────
         self.positionMC[0] = self.XPxToMC[self.position[0] - 20]
@@ -357,20 +298,14 @@ class PackHunter(Ghost):
         elif best_dir == 3:
             self.position[0] -= 1
 
-    # ══════════════════════════════════════════════════════════════════════════
+    
     # update2: reemplaza al de Ghost para recibir el objeto Pacman completo
-    # ══════════════════════════════════════════════════════════════════════════
+    
 
     def update2(self, pacman):
         """
         Recibe el objeto Pacman completo (no solo la posición) para poder leer
         pacman.direction, necesario para calcular P*.
-
-        Antes de delegar a path_ia, actualiza el contador de quietud de Pac-Man
-        y recalcula _current_ahead_px para que la anticipación sea dinámica:
-          · Pac-Man en movimiento          → lookahead = PAC_LOOKAHEAD (máximo)
-          · Pac-Man quieto < IDLE_GRACE f  → lookahead se reduce linealmente
-          · Pac-Man quieto ≥ IDLE_GRACE f  → lookahead = 0 (persecución directa)
         """
         # ── Detectar si Pac-Man se movió este frame ────────────────────────
         pac_now = (pacman.position[0], pacman.position[2])

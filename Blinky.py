@@ -5,16 +5,6 @@ from Ghost import Ghost
 class Blinky(Ghost):
     """
     Blinky (fantasma rojo) — persigue a Pac-Man.
-
-    Reglas de movimiento heredadas de Ghost:
-      - Solo puede cambiar de dirección en intersecciones válidas.
-      - No puede regresar por el camino por el que llegó (sin rebote).
-
-    Estrategia de persecución:
-      En cada intersección, de las direcciones disponibles (sin la inversa),
-      elige la que más acerca a Blinky a la posición actual de Pac-Man.
-      Si hay empate en distancia, elige aleatoriamente entre las empatadas
-      para que el comportamiento no sea perfectamente predecible.
     """
 
     CATCH_THRESHOLD = 20   # distancia Manhattan (px) para considerar captura
